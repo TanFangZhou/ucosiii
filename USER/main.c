@@ -2,8 +2,10 @@
 #include "delay.h"
 #include "usart.h"
 #include "led.h"
+#include "key.h"
 #include "includes.h"
 #include "os_app_hooks.h"
+
 //ALIENTEK 探索者STM32F407开发板 UCOSIII实验
 //例4-1 UCOSIII UCOSIII移植
 
@@ -45,6 +47,11 @@ CPU_STK led2_stack_size[LED2_STACK_SIZE];
 void Led2Task(void *parg);
 
 
+void Tmr1Callback(void *ptmr,void *parg);
+OS_TMR tmr1;
+
+#define KEY_MESSAGE_NUM            1
+OS_Q KeyMessage;
 
 int main(void)
 {
@@ -55,7 +62,7 @@ int main(void)
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
     
     LED_Init();
-    
+    KEY_Init();
     OSInit(&err);
     
     OS_CRITICAL_ENTER();
@@ -101,6 +108,21 @@ void StartTask(void *parg)
 #endif
     
     OS_CRITICAL_ENTER();
+    
+    OSTmrCreate ((OS_TMR      *)&tmr1,
+                 (CPU_CHAR    *)"tm1",
+                 (OS_TICK      )0,
+                 (OS_TICK      )50,
+                 (OS_OPT       )OS_OPT_TMR_PERIODIC,
+                 (OS_TMR_CALLBACK_PTR)Tmr1Callback,
+                 (void        *)0,
+                 (OS_ERR      *)&err);
+    
+    OSQCreate  ((OS_Q     *)&KeyMessage,
+                (CPU_CHAR *)"Key Message",
+                (OS_MSG_QTY )KEY_MESSAGE_NUM,
+                (OS_ERR   *)&err);
+                 
    	OSTaskCreate((OS_TCB 	* )&led1_task_tcb,		
 				 (CPU_CHAR	* )"Task1 task", 		
                  (OS_TASK_PTR )Led1Task, 			
@@ -116,7 +138,7 @@ void StartTask(void *parg)
                  (OS_ERR 	* )&err);
     
    	OSTaskCreate((OS_TCB 	* )&led2_task_tcb,		
-				 (CPU_CHAR	* )"Task1 task", 		
+				 (CPU_CHAR	* )"Task2 task", 		
                  (OS_TASK_PTR )Led2Task, 			
                  (void		* )0,					
                  (OS_PRIO	  )LED2_TASK_PRIORITY,     
@@ -128,8 +150,14 @@ void StartTask(void *parg)
                  (void   	* )0,					
                  (OS_OPT      )OS_OPT_TASK_STK_CHK|OS_OPT_TASK_STK_CLR,
                  (OS_ERR 	* )&err);
+   
+
+                
+    
     
    OS_CRITICAL_EXIT();
+                 
+   OSTmrStart(&tmr1,&err);
                  
    OSTaskDel(0,&err);
 }
@@ -155,6 +183,8 @@ void Led1Task(void *parg)
 
 void Led2Task(void *parg)
 {
+    u8 *key;
+    OS_MSG_SIZE size;
     OS_ERR err;
     CPU_SR_ALLOC();
     
@@ -163,9 +193,30 @@ void Led2Task(void *parg)
     
     while(1)
     {
-        GPIO_SetBits(GPIOA,GPIO_Pin_7);
-        OSTimeDlyHMSM(0,0,1,0,OS_OPT_TIME_HMSM_STRICT,&err);
-        GPIO_ResetBits(GPIOA,GPIO_Pin_7);
-        OSTimeDlyHMSM(0,0,1,0,OS_OPT_TIME_HMSM_STRICT,&err);
+        key = OSQPend(&KeyMessage,0,OS_OPT_PEND_BLOCKING,&size,0,&err);
+        if(*key==1)
+        {
+            GPIO_SetBits(GPIOA,GPIO_Pin_7);
+        }
+        else
+        {
+            GPIO_ResetBits(GPIOA,GPIO_Pin_7);
+        }
     }
 }
+
+
+void Tmr1Callback(void *ptmr,void *parg)
+{
+    static u8 key;
+    OS_ERR err;
+    key = KeyDetect();
+    switch(key)
+    {
+        case 0:OSQPost(&KeyMessage,&key,1,OS_OPT_POST_FIFO,&err); break;
+        case 1:OSQPost(&KeyMessage,&key,1,OS_OPT_POST_FIFO,&err); break;
+        default: break;
+    }
+    
+}
+
