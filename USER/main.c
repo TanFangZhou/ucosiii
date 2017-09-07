@@ -112,7 +112,7 @@ void StartTask(void *parg)
     OSTmrCreate ((OS_TMR      *)&tmr1,
                  (CPU_CHAR    *)"tm1",
                  (OS_TICK      )0,
-                 (OS_TICK      )50,
+                 (OS_TICK      )50, //50*10ms
                  (OS_OPT       )OS_OPT_TMR_PERIODIC,
                  (OS_TMR_CALLBACK_PTR)Tmr1Callback,
                  (void        *)0,
@@ -208,15 +208,17 @@ void Led2Task(void *parg)
 
 void Tmr1Callback(void *ptmr,void *parg)
 {
-    static u8 key;
+    //static u8 key;
+    volatile static u8 data[18]; 
     OS_ERR err;
-    key = KeyDetect();
-    switch(key)
-    {
-        case 0:OSQPost(&KeyMessage,&key,1,OS_OPT_POST_FIFO,&err); break;
-        case 1:OSQPost(&KeyMessage,&key,1,OS_OPT_POST_FIFO,&err); break;
-        default: break;
-    }
+   // key = KeyDetect();
+    OSQPost(&KeyMessage,(void *)data,18,OS_OPT_POST_FIFO,&err);
+//    switch(key)
+//    {
+//        case 0:OSQPost(&KeyMessage,&key,1,OS_OPT_POST_FIFO,&err); break;
+//        case 1:OSQPost(&KeyMessage,&key,1,OS_OPT_POST_FIFO,&err); break;
+//        default: break;
+//    }
     
 }
 
